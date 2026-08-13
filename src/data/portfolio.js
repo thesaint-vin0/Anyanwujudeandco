@@ -14,20 +14,20 @@ export const profile = {
     { title: "Professionalism", desc: "Institutional-grade service delivered with discretion and diligence." },
     { title: "Partnership", desc: "Long-term relationships built on trust, transparency, and measurable results." },
   ],
-  email: "jude.anyanwu@fiscal-architecture.com",
-  phone: "+1 (555) 014-2278",
-  location: "Financial District, New York, NY",
+  email: "ajude540@gmail.com",
+  phone: "+234 8034414160",
+  location: "Lagos, Nigeria",
   social: {
-    linkedin: "https://www.linkedin.com/",
-    email: "mailto:jude.anyanwu@fiscal-architecture.com",
+    linkedin: "https://www.linkedin.com/jude anyanwu",
+    email: "mailto:ajude540@gmail.com",
   },
 };
 
 export const stats = [
   { value: 14, suffix: "+", label: "Years of Experience" },
-  { value: 240, suffix: "+", label: "Clients Served" },
+  { value: 50, suffix: "+", label: "Clients Served" },
   { value: 1800, suffix: "+", label: "Financial Reports Completed" },
-  { value: 96, suffix: "+", label: "Businesses Supported" },
+  { value: 76, suffix: "+", label: "Businesses Supported" },
 ];
 
 export const services = [
