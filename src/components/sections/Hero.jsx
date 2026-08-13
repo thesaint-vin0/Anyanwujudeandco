@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, Download, ChevronDown } from "lucide-react";
 import { profile } from "@/data/portfolio";
-import Hero3D from "@/components/three/Hero3D";
+import Hero3D from "../three/Hero3D";
 
 export default function Hero() {
   return (
