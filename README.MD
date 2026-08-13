@@ -38,7 +38,7 @@ npm install
 npm run dev
 ```
 
-The app runs on the Base44 platform. The contact form sends real email via the platform's email integration to `jude.anyanwu@fiscal-architecture.com` — update `CONTACT_RECIPIENT` in `src/components/sections/Contact.jsx` to change the destination.
+The contact form sends real email via the platform's email integration to `ajude540@gmail.com` —To update `CONTACT_RECIPIENT` in `src/components/sections/Contact.jsx` to change the destination.
 
 ## 📁 Structure
 

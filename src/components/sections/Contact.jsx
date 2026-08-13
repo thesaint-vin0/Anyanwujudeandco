@@ -4,7 +4,7 @@ import { profile } from "@/data/portfolio";
 import { Mail, Phone, MapPin, Linkedin, Check, Loader2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 
-const CONTACT_RECIPIENT = "jude.anyanwu@fiscal-architecture.com";
+const CONTACT_RECIPIENT = "ajude540@gmail.com";
 
 export default function Contact() {
   const [status, setStatus] = useState("idle"); // idle | sending | sent | error
