@@ -17,9 +17,9 @@ export default function Loader() {
           aria-live="polite"
         >
           <div className="flex items-baseline gap-1">
-            <span className="font-mono-data text-sm tracking-[0.3em] text-muted-foreground">FISCAL</span>
+            <span className="font-mono-data text-sm tracking-[0.3em] text-muted-foreground">JUDE</span>
             <span className="font-mono-data text-sm tracking-[0.3em] text-accent">·</span>
-            <span className="font-mono-data text-sm tracking-[0.3em] text-muted-foreground">ARCHITECTURE</span>
+            <span className="font-mono-data text-sm tracking-[0.3em] text-muted-foreground">ANYANWU</span>
           </div>
           <div className="mt-6 h-px w-48 overflow-hidden bg-border">
             <motion.div

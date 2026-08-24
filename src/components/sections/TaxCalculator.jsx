@@ -2,8 +2,10 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Calculator, ChevronDown, ArrowRight } from "lucide-react";
 
-// 2024 US Federal tax brackets (simplified)
-const TAX_BRACKETS = {
+/* ============================================================
+   US TAX CONFIG (2024 Federal — simplified)
+   ============================================================ */
+const US_BRACKETS = {
   single: [
     { min: 0, max: 11600, rate: 0.10 },
     { min: 11600, max: 47150, rate: 0.12 },
@@ -23,16 +25,37 @@ const TAX_BRACKETS = {
     { min: 731200, max: Infinity, rate: 0.37 },
   ],
 };
+const US_DEDUCTION = { single: 14600, married: 29200 };
+const US_SE_RATE = 0.1413;
 
-const STANDARD_DEDUCTION = { single: 14600, married: 29200 };
-const SE_TAX_RATE = 0.1413; // 14.13% self-employment tax on 92.35% of net
+/* ============================================================
+   NIGERIA TAX CONFIG (PIT / PAYE — 2024)
+   Progressive annual brackets per the Personal Income Tax Act
+   ============================================================ */
+const NG_BRACKETS = [
+  { min: 0, max: 300000, rate: 0.07 },
+  { min: 300000, max: 600000, rate: 0.11 },
+  { min: 600000, max: 1100000, rate: 0.15 },
+  { min: 1100000, max: 1600000, rate: 0.19 },
+  { min: 1600000, max: 3200000, rate: 0.21 },
+  { min: 3200000, max: Infinity, rate: 0.24 },
+];
+const NG_PENSION_RATE = 0.08; // employee pension contribution
+const NG_CRA_MIN = 200000;   // ₦200,000 base
+const NG_CRA_PCT = 0.20;      // + 20% of gross income
 
-function fmt(n) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+/* ============================================================
+   Shared helpers
+   ============================================================ */
+function fmt(n, currency) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(n);
 }
 
-function calcTax(taxableIncome, filing) {
-  const brackets = TAX_BRACKETS[filing];
+function calcProgressive(taxableIncome, brackets) {
   let tax = 0;
   for (const b of brackets) {
     if (taxableIncome <= b.min) break;
@@ -42,48 +65,123 @@ function calcTax(taxableIncome, filing) {
   return tax;
 }
 
-function getRate(taxableIncome, filing) {
-  const brackets = TAX_BRACKETS[filing];
+function getMarginalRate(taxableIncome, brackets) {
   for (let i = brackets.length - 1; i >= 0; i--) {
     if (taxableIncome > brackets[i].min) return brackets[i].rate;
   }
   return 0;
 }
 
+/* ============================================================
+   Country-specific calculators
+   ============================================================ */
+function calcUS({ grossIncome, businessExpenses, filing, selfEmployed }) {
+  const deduction = US_DEDUCTION[filing];
+  let netIncome = grossIncome - businessExpenses;
+  let seTax = 0;
+
+  if (selfEmployed) {
+    seTax = netIncome * 0.9235 * US_SE_RATE;
+    netIncome -= seTax / 2;
+  }
+
+  const taxableIncome = Math.max(0, netIncome - deduction);
+  const federalTax = calcProgressive(taxableIncome, US_BRACKETS[filing]);
+  const marginalRate = getMarginalRate(taxableIncome, US_BRACKETS[filing]);
+  const totalTax = federalTax + seTax;
+  const effectiveRate = grossIncome > 0 ? (totalTax / grossIncome) * 100 : 0;
+  const takeHome = grossIncome - businessExpenses - totalTax;
+
+  return {
+    rows: [
+      { label: "Federal Income Tax", amount: federalTax, color: "bg-accent" },
+      ...(seTax > 0 ? [{ label: "Self-Employment Tax", amount: seTax, color: "bg-primary/60" }] : []),
+      ...(businessExpenses > 0 ? [{ label: "Expenses", amount: businessExpenses, color: "bg-border" }] : []),
+      { label: "Take-home", amount: takeHome, color: "bg-secondary" },
+    ],
+    cards: [
+      { label: "EST. TOTAL TAX", value: fmt(totalTax, "USD"), sub: `${effectiveRate.toFixed(1)}% effective rate`, highlight: true },
+      { label: "TAKE-HOME (NET)", value: fmt(takeHome, "USD"), sub: "after taxes & expenses" },
+      { label: "FEDERAL INCOME TAX", value: fmt(federalTax, "USD"), sub: `${(marginalRate * 100).toFixed(0)}% marginal bracket` },
+      seTax > 0
+        ? { label: "SELF-EMPLOYMENT TAX", value: fmt(seTax, "USD"), sub: "14.13% on 92.35% net" }
+        : { label: "TAXABLE INCOME", value: fmt(taxableIncome, "USD"), sub: "after standard deduction" },
+    ],
+    ctaNote: "This estimate doesn't account for credits, deductions, or state tax. Book a consultation.",
+    grossIncome,
+  };
+}
+
+function calcNG({ grossIncome, businessExpenses, pension }) {
+  // Consolidated Relief Allowance: higher of ₦200,000 + 20% of gross, or 1% of gross
+  const cra = Math.max(NG_CRA_MIN + grossIncome * NG_CRA_PCT, grossIncome * 0.01);
+  const pensionAmount = pension ? grossIncome * NG_PENSION_RATE : 0;
+
+  const taxableIncome = Math.max(0, grossIncome - cra - pensionAmount - businessExpenses);
+  const pitTax = calcProgressive(taxableIncome, NG_BRACKETS);
+  const marginalRate = getMarginalRate(taxableIncome, NG_BRACKETS);
+  const totalTax = pitTax;
+  const effectiveRate = grossIncome > 0 ? (totalTax / grossIncome) * 100 : 0;
+  const takeHome = grossIncome - pensionAmount - businessExpenses - totalTax;
+
+  return {
+    rows: [
+      { label: "PAYE / PIT", amount: pitTax, color: "bg-accent" },
+      ...(pensionAmount > 0 ? [{ label: "Pension (8%)", amount: pensionAmount, color: "bg-primary/60" }] : []),
+      ...(businessExpenses > 0 ? [{ label: "Expenses", amount: businessExpenses, color: "bg-border" }] : []),
+      { label: "Take-home", amount: takeHome, color: "bg-secondary" },
+    ],
+    cards: [
+      { label: "EST. TOTAL TAX", value: fmt(totalTax, "NGN"), sub: `${effectiveRate.toFixed(1)}% effective rate`, highlight: true },
+      { label: "TAKE-HOME (NET)", value: fmt(takeHome, "NGN"), sub: "after taxes, pension & expenses" },
+      { label: "PAYE / PIT TAX", value: fmt(pitTax, "NGN"), sub: `${(marginalRate * 100).toFixed(0)}% marginal bracket` },
+      { label: "TAXABLE INCOME", value: fmt(taxableIncome, "NGN"), sub: "after CRA, pension & expenses" },
+    ],
+    ctaNote: "This estimate uses simplified PAYE brackets and standard CRA. State tax and specific reliefs may apply. Book a consultation.",
+    grossIncome,
+  };
+}
+
+/* ============================================================
+   Component
+   ============================================================ */
+const COUNTRIES = [
+  { code: "US", label: "United States", currency: "USD", symbol: "$" },
+  { code: "NG", label: "Nigeria", currency: "NGN", symbol: "₦" },
+];
+
 export default function TaxCalculator() {
+  const [country, setCountry] = useState("US");
   const [income, setIncome] = useState("");
   const [expenses, setExpenses] = useState("");
   const [filing, setFiling] = useState("single");
   const [selfEmployed, setSelfEmployed] = useState(false);
+  const [pension, setPension] = useState(true);
   const [result, setResult] = useState(null);
+
+  const activeCountry = COUNTRIES.find((c) => c.code === country);
 
   const calculate = (e) => {
     e.preventDefault();
     const grossIncome = parseFloat(income.replace(/,/g, "")) || 0;
     const businessExpenses = parseFloat(expenses.replace(/,/g, "")) || 0;
-    const deduction = STANDARD_DEDUCTION[filing];
 
-    let netIncome = grossIncome - businessExpenses;
-    let seTax = 0;
+    const res =
+      country === "US"
+        ? calcUS({ grossIncome, businessExpenses, filing, selfEmployed })
+        : calcNG({ grossIncome, businessExpenses, pension });
 
-    if (selfEmployed) {
-      seTax = netIncome * 0.9235 * SE_TAX_RATE;
-      netIncome -= seTax / 2; // deduct half SE tax
-    }
-
-    const taxableIncome = Math.max(0, netIncome - deduction);
-    const federalTax = calcTax(taxableIncome, filing);
-    const marginalRate = getRate(taxableIncome, filing);
-    const totalTax = federalTax + seTax;
-    const effectiveRate = grossIncome > 0 ? (totalTax / grossIncome) * 100 : 0;
-    const takeHome = grossIncome - businessExpenses - totalTax;
-
-    setResult({ federalTax, seTax, totalTax, effectiveRate, marginalRate, takeHome, taxableIncome, grossIncome, businessExpenses });
+    setResult(res);
   };
 
   const formatInput = (val, setter) => {
     const num = val.replace(/[^0-9]/g, "");
     setter(num ? Number(num).toLocaleString("en-US") : "");
+  };
+
+  const switchCountry = (code) => {
+    setCountry(code);
+    setResult(null);
   };
 
   return (
@@ -97,27 +195,43 @@ export default function TaxCalculator() {
             </h2>
           </div>
           <p className="max-w-sm font-body text-sm text-muted-foreground">
-            Based on 2024 US federal brackets. This is a simplified estimate only — actual liability may vary. Book a consultation for a precise analysis.
+            Simplified estimates based on current tax brackets. Actual liability may vary — book a consultation for a precise analysis.
           </p>
         </div>
 
-        <div className="mt-14 grid gap-8 lg:grid-cols-2">
+        {/* Country toggle */}
+        <div className="mt-8 inline-flex rounded-full border border-border bg-background/60 p-1">
+          {COUNTRIES.map((c) => (
+            <button
+              key={c.code}
+              type="button"
+              onClick={() => switchCountry(c.code)}
+              className={`rounded-full px-5 py-2 font-mono-data text-[0.7rem] tracking-[0.15em] transition-colors ${
+                country === c.code ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-10 grid gap-8 lg:grid-cols-2">
           {/* Form */}
           <div className="glass-card rounded-sm p-8">
             <form onSubmit={calculate} className="space-y-6">
               {/* Gross Income */}
               <div className="relative">
                 <label htmlFor="gross" className="font-mono-data text-[0.65rem] tracking-[0.2em] text-muted-foreground">
-                  ANNUAL GROSS INCOME (USD) *
+                  ANNUAL GROSS INCOME ({activeCountry.currency}) *
                 </label>
                 <div className="mt-2 flex items-center rounded-sm border border-border bg-background/60 focus-within:border-secondary">
-                  <span className="px-4 font-mono-data text-sm text-muted-foreground">$</span>
+                  <span className="px-4 font-mono-data text-sm text-muted-foreground">{activeCountry.symbol}</span>
                   <input
                     id="gross"
                     required
                     value={income}
                     onChange={(e) => formatInput(e.target.value, setIncome)}
-                    placeholder="120,000"
+                    placeholder={country === "US" ? "120,000" : "5,000,000"}
                     className="w-full bg-transparent py-3 pr-4 font-mono-data text-sm text-foreground outline-none"
                   />
                 </div>
@@ -126,10 +240,10 @@ export default function TaxCalculator() {
               {/* Business Expenses */}
               <div className="relative">
                 <label htmlFor="expenses" className="font-mono-data text-[0.65rem] tracking-[0.2em] text-muted-foreground">
-                  DEDUCTIBLE BUSINESS EXPENSES (USD)
+                  DEDUCTIBLE BUSINESS EXPENSES ({activeCountry.currency})
                 </label>
                 <div className="mt-2 flex items-center rounded-sm border border-border bg-background/60 focus-within:border-secondary">
-                  <span className="px-4 font-mono-data text-sm text-muted-foreground">$</span>
+                  <span className="px-4 font-mono-data text-sm text-muted-foreground">{activeCountry.symbol}</span>
                   <input
                     id="expenses"
                     value={expenses}
@@ -140,41 +254,64 @@ export default function TaxCalculator() {
                 </div>
               </div>
 
-              {/* Filing Status */}
-              <div>
-                <label htmlFor="filing" className="font-mono-data text-[0.65rem] tracking-[0.2em] text-muted-foreground">
-                  FILING STATUS
-                </label>
-                <div className="relative mt-2">
-                  <select
-                    id="filing"
-                    value={filing}
-                    onChange={(e) => setFiling(e.target.value)}
-                    className="w-full appearance-none rounded-sm border border-border bg-background/60 px-4 py-3 font-body text-sm text-foreground outline-none focus:border-secondary"
-                  >
-                    <option value="single">Single / Head of Household</option>
-                    <option value="married">Married Filing Jointly</option>
-                  </select>
-                  <ChevronDown size={16} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                </div>
-              </div>
-
-              {/* Self-employed toggle */}
-              <div className="flex items-center justify-between rounded-sm border border-border bg-background/60 px-5 py-4">
+              {/* US-only: Filing Status */}
+              {country === "US" && (
                 <div>
-                  <p className="font-body text-sm font-medium text-foreground">Self-Employed / Freelancer</p>
-                  <p className="mt-0.5 font-body text-xs text-muted-foreground">Adds 14.13% self-employment tax on net earnings</p>
+                  <label htmlFor="filing" className="font-mono-data text-[0.65rem] tracking-[0.2em] text-muted-foreground">
+                    FILING STATUS
+                  </label>
+                  <div className="relative mt-2">
+                    <select
+                      id="filing"
+                      value={filing}
+                      onChange={(e) => setFiling(e.target.value)}
+                      className="w-full appearance-none rounded-sm border border-border bg-background/60 px-4 py-3 font-body text-sm text-foreground outline-none focus:border-secondary"
+                    >
+                      <option value="single">Single / Head of Household</option>
+                      <option value="married">Married Filing Jointly</option>
+                    </select>
+                    <ChevronDown size={16} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={selfEmployed}
-                  onClick={() => setSelfEmployed((v) => !v)}
-                  className={`relative h-6 w-11 rounded-full transition-colors ${selfEmployed ? "bg-secondary" : "bg-border"}`}
-                >
-                  <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-transform ${selfEmployed ? "translate-x-6" : "translate-x-1"}`} />
-                </button>
-              </div>
+              )}
+
+              {/* US-only: Self-employed toggle */}
+              {country === "US" && (
+                <div className="flex items-center justify-between rounded-sm border border-border bg-background/60 px-5 py-4">
+                  <div>
+                    <p className="font-body text-sm font-medium text-foreground">Self-Employed / Freelancer</p>
+                    <p className="mt-0.5 font-body text-xs text-muted-foreground">Adds 14.13% self-employment tax on net earnings</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={selfEmployed}
+                    onClick={() => setSelfEmployed((v) => !v)}
+                    className={`relative h-6 w-11 rounded-full transition-colors ${selfEmployed ? "bg-secondary" : "bg-border"}`}
+                  >
+                    <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-transform ${selfEmployed ? "translate-x-6" : "translate-x-1"}`} />
+                  </button>
+                </div>
+              )}
+
+              {/* Nigeria-only: Pension toggle */}
+              {country === "NG" && (
+                <div className="flex items-center justify-between rounded-sm border border-border bg-background/60 px-5 py-4">
+                  <div>
+                    <p className="font-body text-sm font-medium text-foreground">Pension Contribution (8%)</p>
+                    <p className="mt-0.5 font-body text-xs text-muted-foreground">Standard employee pension deduction on gross income</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={pension}
+                    onClick={() => setPension((v) => !v)}
+                    className={`relative h-6 w-11 rounded-full transition-colors ${pension ? "bg-secondary" : "bg-border"}`}
+                  >
+                    <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-transform ${pension ? "translate-x-6" : "translate-x-1"}`} />
+                  </button>
+                </div>
+              )}
 
               <button
                 type="submit"
@@ -212,41 +349,15 @@ export default function TaxCalculator() {
                 >
                   {/* Main metrics */}
                   <div className="grid grid-cols-2 gap-4">
-                    <ResultCard
-                      label="EST. TOTAL TAX"
-                      value={fmt(result.totalTax)}
-                      sub={`${result.effectiveRate.toFixed(1)}% effective rate`}
-                      highlight
-                    />
-                    <ResultCard
-                      label="TAKE-HOME (NET)"
-                      value={fmt(result.takeHome)}
-                      sub="after taxes & expenses"
-                    />
-                    <ResultCard
-                      label="FEDERAL INCOME TAX"
-                      value={fmt(result.federalTax)}
-                      sub={`${(result.marginalRate * 100).toFixed(0)}% marginal bracket`}
-                    />
-                    {result.seTax > 0 ? (
-                      <ResultCard label="SELF-EMPLOYMENT TAX" value={fmt(result.seTax)} sub="14.13% on 92.35% net" />
-                    ) : (
-                      <ResultCard label="TAXABLE INCOME" value={fmt(result.taxableIncome)} sub="after standard deduction" />
-                    )}
+                    {result.cards.map((card) => (
+                      <ResultCard key={card.label} {...card} />
+                    ))}
                   </div>
 
                   {/* Breakdown bar */}
                   <div className="glass-card rounded-sm p-5">
                     <div className="ledger-label mb-3">INCOME BREAKDOWN</div>
-                    <BreakdownBar
-                      values={[
-                        { label: "Take-home", amount: result.takeHome, color: "bg-secondary" },
-                        { label: "Fed. Tax", amount: result.federalTax, color: "bg-accent" },
-                        ...(result.seTax > 0 ? [{ label: "SE Tax", amount: result.seTax, color: "bg-primary/60" }] : []),
-                        ...(result.businessExpenses > 0 ? [{ label: "Expenses", amount: result.businessExpenses, color: "bg-border" }] : []),
-                      ]}
-                      total={result.grossIncome}
-                    />
+                    <BreakdownBar values={result.rows} total={result.grossIncome} />
                   </div>
 
                   {/* CTA */}
@@ -256,9 +367,7 @@ export default function TaxCalculator() {
                   >
                     <div>
                       <p className="font-heading text-sm font-semibold text-secondary">Get a precise analysis →</p>
-                      <p className="mt-0.5 font-body text-xs text-muted-foreground">
-                        This estimate doesn't account for credits, deductions, or state tax. Book a consultation.
-                      </p>
+                      <p className="mt-0.5 font-body text-xs text-muted-foreground">{result.ctaNote}</p>
                     </div>
                     <ArrowRight size={18} className="text-secondary transition-transform group-hover:translate-x-1" />
                   </a>
