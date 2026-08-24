@@ -2,9 +2,11 @@ import { Suspense } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, Download, ChevronDown } from "lucide-react";
 import { profile } from "@/data/portfolio";
-import Hero3D from "../three/Hero3D";
+import Hero3D from "@/components/three/Hero3D";
+import { useSiteAsset } from "@/hooks/useSiteAsset";
 
 export default function Hero() {
+  const { url: cvUrl } = useSiteAsset("cv");
   return (
     <section id="home" className="relative min-h-screen w-full overflow-hidden bg-background">
       {/* 3D layer */}
@@ -73,7 +75,9 @@ export default function Hero() {
             <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
           </a>
           <a
-            href="#about"
+            href={cvUrl || "#about"}
+            target={cvUrl ? "_blank" : undefined}
+            rel="noreferrer"
             className="inline-flex items-center gap-2 rounded-full border border-border bg-white/60 px-6 py-3 font-body text-sm font-medium text-foreground backdrop-blur-sm transition-colors hover:bg-white"
           >
             <Download size={16} /> Download CV

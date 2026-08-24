@@ -3,6 +3,7 @@ import { useInView } from "@/hooks/useInView";
 import { useCountUp } from "@/hooks/useCountUp";
 import { profile, stats } from "@/data/portfolio";
 import { Building2 } from "lucide-react";
+import { useSiteAsset } from "@/hooks/useSiteAsset";
 
 function Stat({ stat }) {
   const [ref, inView] = useInView({ threshold: 0.4 });
@@ -19,6 +20,7 @@ function Stat({ stat }) {
 }
 
 export default function About() {
+  const { url: profileUrl } = useSiteAsset("profile_image");
   return (
     <section id="about" className="relative w-full bg-background py-32">
       <div className="mx-auto max-w-[1400px] px-[8vw]">
@@ -34,7 +36,7 @@ export default function About() {
             <div className="relative">
               <div className="aspect-[3/4] overflow-hidden rounded-sm border hairline">
                 <img
-                  src="https://media.base44.com/images/public/6a56c9c3ddbdf97fb3f76297/080c4d9ca_generated_8e45d432.png"
+                  src={profileUrl || "https://media.base44.com/images/public/6a56c9c3ddbdf97fb3f76297/080c4d9ca_generated_8e45d432.png"}
                   alt="Portrait of Jude Anyanwu, professional accountant"
                   className="h-full w-full object-cover"
                   loading="lazy"

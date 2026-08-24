@@ -1,0 +1,30 @@
+{
+  "name": "SiteAsset",
+  "type": "object",
+  "properties": {
+    "key": {
+      "type": "string",
+      "description": "Unique identifier for the asset (e.g., 'cv', 'profile_image', 'portfolio_1')"
+    },
+    "label": {
+      "type": "string",
+      "description": "Human-readable label for the asset"
+    },
+    "url": {
+      "type": "string",
+      "description": "URL of the uploaded file"
+    },
+    "file_type": {
+      "type": "string",
+      "enum": [
+        "pdf",
+        "image"
+      ],
+      "description": "Type of the uploaded file"
+    }
+  },
+  "required": [
+    "key",
+    "url"
+  ]
+}

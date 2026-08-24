@@ -1,7 +1,35 @@
+import { useState } from "react";
 import { profile, services } from "@/data/portfolio";
-import { ArrowUp, Linkedin, Mail } from "lucide-react";
+import { ArrowUp, Linkedin, Mail, Loader2, Check } from "lucide-react";
+import { base44 } from "@/api/base44Client";
+
+const CONTACT_RECIPIENT = "jude.anyanwu@fiscal-architecture.com";
 
 export default function Footer() {
+  const [subEmail, setSubEmail] = useState("");
+  const [subStatus, setSubStatus] = useState("idle");
+
+  const onSubscribe = async (e) => {
+    e.preventDefault();
+    setSubStatus("sending");
+    try {
+      await base44.integrations.Core.SendEmail({
+        to: CONTACT_RECIPIENT,
+        subject: "New Newsletter Subscriber",
+        body: `A new visitor subscribed to the quarterly briefing.\n\nEmail: ${subEmail}`,
+      });
+      try {
+        await base44.entities.Subscriber.create({ email: subEmail });
+      } catch {
+        // Entity creation may fail for unauthenticated users — email notification still sent
+      }
+      setSubStatus("sent");
+      setSubEmail("");
+    } catch {
+      setSubStatus("error");
+    }
+  };
+
   return (
     <footer className="relative w-full bg-primary text-primary-foreground">
       {/* Newsletter band */}
@@ -13,17 +41,32 @@ export default function Footer() {
               Quarterly insights on tax, cash flow, and compliance. No noise.
             </p>
           </div>
-          <form onSubmit={(e) => e.preventDefault()} className="flex w-full max-w-md items-center gap-2">
+          <form onSubmit={onSubscribe} className="flex w-full max-w-md items-center gap-2">
             <input
               type="email"
               required
+              value={subEmail}
+              onChange={(e) => setSubEmail(e.target.value)}
               placeholder="your@email.com"
-              className="w-full rounded-full border border-primary-foreground/20 bg-primary-foreground/5 px-5 py-3 font-body text-sm text-primary-foreground placeholder:text-primary-foreground/40 outline-none focus:border-accent"
+              disabled={subStatus === "sending" || subStatus === "sent"}
+              className="w-full rounded-full border border-primary-foreground/20 bg-primary-foreground/5 px-5 py-3 font-body text-sm text-primary-foreground placeholder:text-primary-foreground/40 outline-none focus:border-accent disabled:opacity-60"
             />
-            <button className="shrink-0 rounded-full bg-accent px-5 py-3 font-body text-sm font-medium text-accent-foreground transition-transform hover:scale-[1.03]">
-              Subscribe
+            <button
+              disabled={subStatus === "sending" || subStatus === "sent"}
+              className="shrink-0 rounded-full bg-accent px-5 py-3 font-body text-sm font-medium text-accent-foreground transition-transform hover:scale-[1.03] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {subStatus === "sending" && <Loader2 size={16} className="animate-spin" />}
+              {subStatus === "sent" && <Check size={16} />}
+              {subStatus === "idle" && "Subscribe"}
+              {subStatus === "error" && "Retry"}
             </button>
           </form>
+          {subStatus === "sent" && (
+            <p className="mt-2 font-body text-xs text-accent">You're subscribed — thank you!</p>
+          )}
+          {subStatus === "error" && (
+            <p className="mt-2 font-body text-xs text-primary-foreground/60">Something went wrong. Please try again.</p>
+          )}
         </div>
       </div>
 
